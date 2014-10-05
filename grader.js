@@ -24,24 +24,39 @@ References:
 var fs = require('fs');
 var program = require('commander');
 var cheerio = require('cheerio');
+var rest = require('restler');
 var HTMLFILE_DEFAULT = "index.html";
 var CHECKSFILE_DEFAULT = "checks.json";
 
 var assertFileExists = function(infile) {
     var instr = infile.toString();
-    if(!fs.existsSync(instr)) {
-	console.log("%s does not exist. Exiting.", instr);
-	process.exit(1); //http://nodejs.org/api/process.html#process_process_exit_code
+    if (!isUrl(instr)) { //not url
+      if (!fs.existsSync(instr)) { 
+        //file does not exist locally
+        console.log("%s does not exist. Exiting.", instr);
+  	process.exit(1); //http://nodejs.org/api/process.html#process_process_exit_code
+      }
     }
     return instr;
 };
 
 var cheerioHtmlFile = function(htmlfile) {
-    return cheerio.load(fs.readFileSync(htmlfile));
+    if (isUrl(htmlfile)) {
+      return getUrlFile(htmlfile);
+    } else {
+      return cheerio.load(fs.readFileSync(htmlfile));
+    }
 };
 
 var loadChecks = function(checksfile) {
     return JSON.parse(fs.readFileSync(checksfile));
+};
+
+var isUrl = function(url) {
+    if (url.substr(0,6) == 'http://' || url.substr(0,7) == 'https://') {
+       //filename is a http url, so assume it exists
+       return true;
+    };
 };
 
 var checkHtmlFile = function(htmlfile, checksfile) {
@@ -59,6 +74,18 @@ var clone = function(fn) {
     // Workaround for commander.js issue.
     // http://stackoverflow.com/a/6772648
     return fn.bind({});
+};
+
+var getUrlFile = function(url) {
+    //gets the file pointed to by a url using http
+    rest.get(url).on('complete', function(result) {
+      if (result instanceof Error) {
+        console.log('Error getting web file:', result.message);
+        this.retyr(5000); // try again in 5 seconds
+      } else {
+        return(result);
+      }
+    });
 };
 
 if(require.main == module) { //only run if invoked from command line
