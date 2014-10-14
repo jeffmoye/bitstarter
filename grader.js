@@ -27,36 +27,23 @@ var cheerio = require('cheerio');
 var rest = require('restler');
 var HTMLFILE_DEFAULT = "index.html";
 var CHECKSFILE_DEFAULT = "checks.json";
+var TEMP_CACHE = ".graderCache.html"; // filename for cache when grading a url
 
 var assertFileExists = function(infile) {
     var instr = infile.toString();
-    if (!isUrl(instr)) { //not url
-      if (!fs.existsSync(instr)) { 
-        //file does not exist locally
-        console.log("%s does not exist. Exiting.", instr);
-  	process.exit(1); //http://nodejs.org/api/process.html#process_process_exit_code
+    if (!fs.existsSync(instr)) {  //file does not exist locally
+      console.log("%s does not exist. Exiting.", instr);
+      process.exit(1); //http://nodejs.org/api/process.html#process_process_exit_code
       }
-    }
     return instr;
 };
 
 var cheerioHtmlFile = function(htmlfile) {
-    if (isUrl(htmlfile)) {
-      return getUrlFile(htmlfile);
-    } else {
-      return cheerio.load(fs.readFileSync(htmlfile));
-    }
+    return cheerio.load(fs.readFileSync(htmlfile));
 };
 
 var loadChecks = function(checksfile) {
     return JSON.parse(fs.readFileSync(checksfile));
-};
-
-var isUrl = function(url) {
-    if (url.substr(0,6) == 'http://' || url.substr(0,7) == 'https://') {
-       //filename is a http url, so assume it exists
-       return true;
-    };
 };
 
 var checkHtmlFile = function(htmlfile, checksfile) {
@@ -76,27 +63,32 @@ var clone = function(fn) {
     return fn.bind({});
 };
 
-var getUrlFile = function(url) {
-    //gets the file pointed to by a url using http
-    rest.get(url).on('complete', function(result) {
-      if (result instanceof Error) {
-        console.log('Error getting web file:', result.message);
-        this.retyr(5000); // try again in 5 seconds
-      } else {
-        return(result);
-      }
-    });
-};
-
 if(require.main == module) { //only run if invoked from command line
     program
       .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
       .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
+      .option('-u, --url <url_source>', 'Parse page on web  instead of local file')
       .parse(process.argv);
-    var checkJson = checkHtmlFile(program.file, program.checks);
-    var outJson = JSON.stringify(checkJson, null, 4);
-    console.log(outJson);
+
+    if (program.url) { // do this if a url was specified
+      rest.get(program.url).on('complete', function(result) {
+        if (result instanceof Error) {
+          console.log('Error getting web file. Exiting : %s', result.message);
+          process.exit(1); //http://nodejs.org/api/process.html#process_process_exit_code 
+        } else {
+          fs.writeFileSync(TEMP_CACHE, result);
+          var checkJson = checkHtmlFile(TEMP_CACHE, program.checks);
+          var outJson = JSON.stringify(checkJson, null, 4);
+          console.log(outJson);
+        }
+      });
+    }
+    else { //do this if no url specified
+      var checkJson = checkHtmlFile(program.file, program.checks);
+      var outJson = JSON.stringify(checkJson, null, 4);
+      console.log(outJson);
+    };
+    
 } else {
     exports.checkHtmlFile = checkHtmlFile;
-}
-
+};
