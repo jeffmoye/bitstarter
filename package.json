@@ -1,5 +1,5 @@
 {
-  "name": "eRPU - Mobile app suite for Road Policing Officers",
+  "name": "eRPU",
   "version": "0.1.0",
   "description": "Bitstarter pages for the eRPU suite",
   "main": "web.js",
